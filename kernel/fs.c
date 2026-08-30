@@ -439,6 +439,50 @@ bmap(struct inode *ip, uint bn)
     brelse(bp);
     return addr;
   }
+  bn = bn - NINDIRECT;
+
+  if(bn < NINDIRECT * NINDIRECT){
+    
+    if((addr = ip->addrs[DOUBLE_INDIRECT]) == 0){
+      addr = balloc(ip->dev);
+      // panic will printed by balloc if any error
+      if(addr == 0){
+        return 0;
+      }
+      ip->addrs[DOUBLE_INDIRECT] = addr;
+    }
+    bp = bread(ip->dev,addr);
+    a = (uint*)bp->data;
+
+    uint idx = bn / NINDIRECT;
+    uint offset =  bn % NINDIRECT;
+    uint ind_addr = a[idx];
+
+    if(ind_addr == 0){
+      ind_addr = balloc(ip->dev);
+      if(ind_addr == 0){
+        brelse(bp);
+        return 0;
+      }
+      a[idx] = ind_addr;
+      log_write(bp);
+
+    }
+    brelse(bp);
+
+    bp = bread(ip->dev,ind_addr);
+    a = (uint*)bp->data;
+
+    if((addr = a[offset]) == 0){
+      addr = balloc(ip->dev);
+      if(addr){
+        a[offset] = addr;
+        log_write(bp);
+      }
+      brelse(bp);
+      return addr;
+    }
+  }
 
   panic("bmap: out of range");
 }
@@ -448,9 +492,9 @@ bmap(struct inode *ip, uint bn)
 void
 itrunc(struct inode *ip)
 {
-  int i, j;
-  struct buf *bp;
-  uint *a;
+  int i, j,k;
+  struct buf *bp,*bp2;
+  uint *a,*b;
 
   for(i = 0; i < NDIRECT; i++){
     if(ip->addrs[i]){
@@ -470,6 +514,25 @@ itrunc(struct inode *ip)
     bfree(ip->dev, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
   }
+
+  if(ip->addrs[DOUBLE_INDIRECT]){
+    bp = bread(ip->dev, ip->addrs[DOUBLE_INDIRECT]);
+    a = (uint*)bp->data;
+    for(j = 0; j < NINDIRECT; j++){           // each indirect block pointer
+        if(a[j]){
+            bp2 = bread(ip->dev, a[j]);
+            b = (uint*)bp2->data;
+            for(k = 0; k < NINDIRECT; k++)    // free all data blocks
+                if(b[k])
+                    bfree(ip->dev, b[k]);
+            brelse(bp2);
+            bfree(ip->dev, a[j]);             // free the indirect block itself
+        }
+    }
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[DOUBLE_INDIRECT]); // free doubly-indirect block
+    ip->addrs[DOUBLE_INDIRECT] = 0;
+}
 
   ip->size = 0;
   iupdate(ip);
@@ -718,3 +781,4 @@ nameiparent(char *path, char *name)
 {
   return namex(path, 1, name);
 }
+

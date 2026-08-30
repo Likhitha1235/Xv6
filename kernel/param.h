@@ -9,7 +9,12 @@
 #define MAXOPBLOCKS  10  // max # of blocks any FS op writes
 #define LOGBLOCKS    (MAXOPBLOCKS*3)  // max data blocks in on-disk log
 #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
-#define FSSIZE       2000  // size of file system in blocks
+#define FSSIZE       20000  // size of file system in blocks
 #define MAXPATH      128   // maximum file path name
 #define USERSTACK    1     // user stack pages
 
+#define MAXSWAPPAGES 256   // maximum swapped pages per process
+// Soft cap on number of resident user pages across the system
+// Task 2 Begin
+#define MAXRESIDENT  16
+// Task 2 End

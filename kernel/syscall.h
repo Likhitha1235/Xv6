@@ -20,3 +20,11 @@
 #define SYS_link   19
 #define SYS_mkdir  20
 #define SYS_close  21
+
+
+
+// Task 2 Begin
+#define SYS_getpagestat 22
+#define SYS_dumpmru 23
+#define SYS_symlink 24
+// Task 2 End

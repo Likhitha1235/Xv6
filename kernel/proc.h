@@ -82,6 +82,37 @@ struct trapframe {
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
+#define MAX_SHM_MAPPINGS 16
+
+struct shm_map{
+  int key;
+  uint64 va;
+};
+
+// Task 2 Begin
+// Swap metadata for a page
+struct swappage {
+  uint64 va;                   // Virtual address of the swapped page
+  uint64 offset;               // Offset in the swap file
+  struct swappage *next;       // Next swapped page in the list
+};
+
+// Statistics for demand paging
+struct pagestat {
+  int num_pagefaults;          // Total page faults
+  int num_swapins;             // Number of swap-ins
+  int num_swapouts;            // Number of swap-outs
+};
+
+// MRU list node - tracks resident user pages
+struct mrunode {
+  struct proc *proc;           // Process owning this page
+  uint64 va;                   // Virtual address of the page
+  struct mrunode *next;        // Next in MRU list
+  struct mrunode *prev;        // Previous in MRU list
+};
+// Task 2 End
+
 struct proc {
   struct spinlock lock;
 
@@ -104,4 +135,14 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  struct shm_map shm_maps[MAX_SHM_MAPPINGS];
+  
+  
+  // Task 2 Begin
+  // Demand paging fields
+  struct file *swapfile;       // Swap file for this process
+  struct swappage *swapped;    // List of swapped-out pages
+  struct pagestat pstat;       // Paging statistics
+  // Task 2 End
 };
+

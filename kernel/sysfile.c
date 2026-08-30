@@ -328,6 +328,33 @@ sys_open(void)
       return -1;
     }
     ilock(ip);
+    if((ip->type == T_SYMLINK) && !(omode & O_NOFOLLOW)){
+      
+      int count = 0;
+      while (ip->type == T_SYMLINK && count < 10){
+        if (readi(ip, 0, (uint64)path, 0, ip->size) != (ip->size)){
+          iunlockput(ip);
+          end_op();
+          return -1;
+        }
+        path[ip->size]=0;
+        iunlockput(ip);
+
+        if((ip = namei(path)) == 0){
+          end_op();
+          return -1;
+        }
+        ilock(ip);
+        count++;
+      }
+
+      if(count >= 10){
+        printf("cycle for symlink,error\n");
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+    }
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
@@ -369,6 +396,8 @@ sys_open(void)
 
   return fd;
 }
+
+
 
 uint64
 sys_mkdir(void)
@@ -501,5 +530,33 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+uint64
+sys_symlink(void)
+{
+  char target[MAXPATH], path[MAXPATH];
+  if (argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0)
+    return -1;
+
+  begin_op();
+  struct inode *ip = create(path, T_SYMLINK, 0, 0);
+  if (ip == 0){
+    end_op();
+    return -1;
+  }
+
+  int len = strlen(target);
+  if(writei(ip, 0, (uint64)target, 0, len + 1) != (len+1)){
+        ip->nlink = 0;
+        iupdate(ip);
+        iunlockput(ip);
+        end_op();
+        return -1;
+  }
+
+  iunlockput(ip);
+  end_op();
   return 0;
 }

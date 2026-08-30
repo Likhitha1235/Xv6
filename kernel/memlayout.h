@@ -39,6 +39,11 @@
 #define KERNBASE 0x80000000L
 #define PHYSTOP (KERNBASE + 128*1024*1024)
 
+#define V2P(a) (((uint64) (a)) - KERNBASE)
+
+// Convert a physical address to a kernel virtual address
+#define P2V(a) ((void *)(((char *) (a)) + KERNBASE))
+
 // map the trampoline page to the highest address,
 // in both user and kernel space.
 #define TRAMPOLINE (MAXVA - PGSIZE)

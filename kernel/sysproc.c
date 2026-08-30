@@ -6,6 +6,9 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "vm.h"
+#include "shm.h"
+#include "mailbox.h"
+
 
 uint64
 sys_exit(void)
@@ -105,3 +108,37 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+
+// Task 2 Begin
+// Get page statistics for a process
+uint64
+sys_getpagestat(void)
+{
+  int pid;
+  uint64 st_addr;
+  
+  argint(0, &pid);
+  argaddr(1, &st_addr);
+  
+  struct pagestat st;
+  if(getpagestat_k(pid, &st) < 0)
+    return -1;
+  
+  // Copy stats to user space
+  struct proc *p = myproc();
+  if(copyout(p->pagetable, st_addr, (char*)&st, sizeof(st)) < 0)
+    return -1;
+  
+  return 0;
+}
+
+// Dump MRU list to console
+uint64
+sys_dumpmru(void)
+{
+  mru_dump();
+  return 0;
+}
+// Task 2 End
+

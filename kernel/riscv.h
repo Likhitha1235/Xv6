@@ -378,3 +378,8 @@ typedef uint64 *pagetable_t; // 512 PTEs
 // Sv39, to avoid having to sign-extend virtual addresses
 // that have the high bit set.
 #define MAXVA (1L << (9 + 9 + 9 + 12 - 1))
+// kernel/riscv.h
+
+// Task 2 Begin
+#define PTE_SWAPPED (1L << 9) // page swapped to disk
+// Task 2 End

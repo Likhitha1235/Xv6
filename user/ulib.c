@@ -158,3 +158,51 @@ sbrklazy(int n) {
   return sys_sbrk(n, SBRK_LAZY);
 }
 
+// Task 3.2
+
+
+long
+strtol(const char *s, char **endptr, int base)
+{
+  long n = 0;
+  int neg = 0;
+
+  // handle sign
+  if (*s == '-') {
+    neg = 1;
+    s++;
+  }
+
+  // detect base if not given
+  if ((base == 0 || base == 16) &&
+      s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
+    s += 2;
+    base = 16;
+  } else if (base == 0) {
+    base = 10;
+  }
+
+  // convert
+  while (*s) {
+    int digit;
+    if (*s >= '0' && *s <= '9')
+      digit = *s - '0';
+    else if (*s >= 'a' && *s <= 'f')
+      digit = *s - 'a' + 10;
+    else if (*s >= 'A' && *s <= 'F')
+      digit = *s - 'A' + 10;
+    else
+      break;
+
+    if (digit >= base)
+      break;
+
+    n = n * base + digit;
+    s++;
+  }
+
+  if (endptr)
+    *endptr = (char*)s;
+
+  return neg ? -n : n;
+}

@@ -34,6 +34,7 @@ trapinithart(void)
 // called from, and returns to, trampoline.S
 // return value is user satp for trampoline.S to switch to.
 //
+int counter = 0;
 uint64
 usertrap(void)
 {
@@ -63,34 +64,97 @@ usertrap(void)
 
     // an interrupt will change sepc, scause, and sstatus,
     // so enable only now that we're done with those registers.
+    //printf("fork called so this is for syscall\n");
+    
     intr_on();
 
     syscall();
+   
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else if((r_scause() == 15 || r_scause() == 13) &&
-            vmfault(p->pagetable, r_stval(), (r_scause() == 13)? 1 : 0) != 0) {
-    // page fault on lazily-allocated page
-  } else {
+   }else if(r_scause() == 15){
+    uint64 fault_va = r_stval();
+    uint64 va =  PGROUNDDOWN(fault_va);
+
+    pte_t *pte = walk(p->pagetable,va,0);
+    if(pte && (*pte & PTE_V) && (*pte &PTE_U)){
+      uint64 old_pa = PTE2PA(*pte);
+      uint64 flags = PTE_FLAGS(*pte);
+
+      if(page_ref_get(old_pa) > 1){
+        char *mem = kalloc();
+        printf("new page is allocated here\n");
+        if(mem == 0){
+          setkilled(p);
+        }else {
+         memmove(mem, (char*)old_pa, PGSIZE);
+
+          
+          *pte = PA2PTE((uint64)mem) | flags | PTE_W | PTE_V;
+
+          kfree((void*) old_pa);
+        }
+      } else {
+        *pte |= PTE_W;
+      }
+      sfence_vma();
+
+    }else {
+
+      if(vmfault(p->pagetable,fault_va,1) != 0){
+
+      }else {
+        printf("usertrap(): store page fault, no mapping va=0x%lx pid=%d\n", fault_va, p->pid);
+        printf(" sepc=0x%lx stval=0x%lx scause=0x%lx\n", r_sepc(), r_stval(), r_scause());
+        setkilled(p);
+      }
+    }
+   }else if(r_scause() == 13 || r_scause() == 15){
+    if (vmfault(p->pagetable, r_stval(), (r_scause() == 13) ? 0 : 1) != 0) {
+      // vmfault handled it
+    } else {
+      printf("usertrap(): page fault could not be handled va=0x%lx pid=%d\n", r_stval(), p->pid);
+      printf("            sepc=0x%lx stval=0x%lx scause=0x%lx\n", r_sepc(), r_stval(), r_scause());
+      setkilled(p);
+    }
+   }else {
     printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
     printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
     setkilled(p);
-  }
+   }
+   if(killed(p)) kexit(-1);
 
-  if(killed(p))
-    kexit(-1);
+   if(which_dev == 2) yield();
 
-  // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
-    yield();
+   prepare_return();
 
-  prepare_return();
+   uint64 satp = MAKE_SATP(p->pagetable);
 
-  // the user page table to switch to, for trampoline.S
-  uint64 satp = MAKE_SATP(p->pagetable);
+   return satp;
 
-  // return to trampoline.S; satp value in a0.
-  return satp;
+  // else if((r_scause() == 15 || r_scause() == 13) &&
+  //           vmfault(p->pagetable, r_stval(), (r_scause() == 13)? 1 : 0) != 0) {
+  //   // page fault on lazily-allocated page
+  // } else {
+  //   printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
+  //   printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
+  //   setkilled(p);
+  // }
+
+  // if(killed(p))
+  //   kexit(-1);
+
+  // // give up the CPU if this is a timer interrupt.
+  // if(which_dev == 2)
+  //   yield();
+
+  // prepare_return();
+
+  // // the user page table to switch to, for trampoline.S
+  // uint64 satp = MAKE_SATP(p->pagetable);
+
+  // // return to trampoline.S; satp value in a0.
+  // return satp;
 }
 
 //

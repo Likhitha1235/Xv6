@@ -6,13 +6,15 @@
 #include "proc.h"
 #include "defs.h"
 
+
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
 
 struct proc *initproc;
 
-int nextpid = 1;
+int nextpid = 1;// starts from 1 
 struct spinlock pid_lock;
 
 extern void forkret(void);
@@ -61,6 +63,24 @@ procinit(void)
 // Must be called with interrupts disabled,
 // to prevent race with process being moved
 // to a different CPU.
+
+struct proc* get_proc_by_pid(int pid) {
+  struct proc *p;
+  
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->pid == pid) {
+      release(&p->lock);
+      return p;
+    }
+    release(&p->lock);
+  }
+  // Task 2 Begin
+  // Initialize swap/MRU system
+  mru_init();
+  // Task 2 End
+  return 0;
+}
 int
 cpuid()
 {
@@ -122,6 +142,8 @@ allocproc(void)
   return 0;
 
 found:
+  
+  
   p->pid = allocpid();
   p->state = USED;
 
@@ -139,7 +161,10 @@ found:
     release(&p->lock);
     return 0;
   }
-
+  // Task 2 Begin
+  // Initialize swap for this process
+  swapinitproc(p);
+  // Task 2 End
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -158,9 +183,18 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+  
+  // MRU DEMAND PAGING: Clean up any remaining MRU entries for this process
+ 
+  
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
+  
+  // Task 2 Begin
+  // Free swap resources
+  swapfreeproc(p);
+  // Task 2 End
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
@@ -168,9 +202,11 @@ freeproc(struct proc *p)
   p->chan = 0;
   p->killed = 0;
   p->xstate = 0;
+  
+  // MRU DEMAND PAGING: Reset paging statistics
+  
   p->state = UNUSED;
 }
-
 // Create a user page table for a given process, with no user memory,
 // but with trampoline and trapframe pages.
 pagetable_t
@@ -320,6 +356,80 @@ reparent(struct proc *p)
 // Exit the current process.  Does not return.
 // An exited process remains in the zombie state
 // until its parent calls wait().
+// void
+// kexit(int status)
+// {
+//   struct proc *p = myproc();
+
+//   if(p == initproc)
+//     panic("init exiting");
+
+//   // Close all open files.
+//   for(int fd = 0; fd < NOFILE; fd++){
+//     if(p->ofile[fd]){
+//       struct file *f = p->ofile[fd];
+//       fileclose(f);
+//       p->ofile[fd] = 0;
+//     }
+//   }
+
+//   begin_op();
+//   iput(p->cwd);
+//   end_op();
+//   p->cwd = 0;
+
+//   acquire(&wait_lock);
+
+//   // Give any children to init.
+//   reparent(p);
+
+//   // Parent might be sleeping in wait().
+//   wakeup(p->parent);
+  
+//   acquire(&p->lock);
+
+//   p->xstate = status;
+//   p->state = ZOMBIE;
+
+//   release(&wait_lock);
+
+//   // Jump into the scheduler, never to return.
+//   sched();
+//   panic("zombie exit");
+// }
+
+// static void
+// freeproc(struct proc *p)
+// {
+//   if(p->trapframe)
+//     kfree((void*)p->trapframe);
+//   p->trapframe = 0;
+  
+//   // MRU DEMAND PAGING: Clean up any remaining MRU entries for this process
+//   // (This is a safety measure in case mru_remove_proc wasn't called)
+//   mru_remove_proc(p);
+  
+//   if(p->pagetable)
+//     proc_freepagetable(p->pagetable, p->sz);
+//   p->pagetable = 0;
+  
+//   p->sz = 0;
+//   p->pid = 0;
+//   p->parent = 0;
+//   p->name[0] = 0;
+//   p->chan = 0;
+//   p->killed = 0;
+//   p->xstate = 0;
+  
+//   // MRU DEMAND PAGING: Reset paging statistics
+//   p->pagefaults = 0;
+//   p->swapins = 0;
+//   p->swapouts = 0;
+//   p->swapped_pages = 0;
+  
+//   p->state = UNUSED;
+// }
+
 void
 kexit(int status)
 {
@@ -341,6 +451,14 @@ kexit(int status)
   iput(p->cwd);
   end_op();
   p->cwd = 0;
+
+  // MRU DEMAND PAGING: Remove all pages of this process from MRU list
+  
+
+  // MRU DEMAND PAGING: Free swap slots used by this process
+  // Note: In a more complete implementation, you might want to
+  // actually free the swap file space, but for simplicity we'll
+  // just let the swap file grow and manage it separately
 
   acquire(&wait_lock);
 

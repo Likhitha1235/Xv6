@@ -42,3 +42,13 @@ entry("getpid");
 entry("sbrk");
 entry("pause");
 entry("uptime");
+
+
+
+# Task 2 Begin
+entry("getpagestat");
+entry("dumpmru");
+
+# Task 2 End
+
+entry("symlink");
